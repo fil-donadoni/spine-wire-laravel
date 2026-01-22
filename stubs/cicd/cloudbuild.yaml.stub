@@ -1,14 +1,17 @@
 steps:
   # Step 1: Build and push Docker image to Artifact Registry
+  # Uses registry-based caching for faster incremental builds
   - id: "build-and-push"
     name: "gcr.io/cloud-builders/docker"
     entrypoint: bash
     args:
       - '-c'
       - |
-        # Build and push Docker image
+        # Build and push Docker image with layer caching
         docker buildx build \
           --push \
+          --cache-from type=registry,ref=$_REGION-docker.pkg.dev/$_PROJECT/$_CLIENT-$_APP-$_ENVIRONMENT/$_SERVICE:cache \
+          --cache-to type=registry,ref=$_REGION-docker.pkg.dev/$_PROJECT/$_CLIENT-$_APP-$_ENVIRONMENT/$_SERVICE:cache,mode=max \
           --file docker/Dockerfile \
           -t "$_REGION-docker.pkg.dev/$_PROJECT/$_CLIENT-$_APP-$_ENVIRONMENT/$_SERVICE:latest" \
           .
@@ -17,7 +20,7 @@ steps:
   # Only updates the image, all other configuration is managed by Terraform
   # Runs in parallel with update_jobs after build completes
   - id: "update_service"
-    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk:alpine"
     waitFor: ["build-and-push"]
     entrypoint: gcloud
     args:
@@ -35,7 +38,7 @@ steps:
   # Jobs are created by Terraform with placeholder image, this step updates them
   # Runs in parallel with update_service after build completes
   - id: "update_jobs"
-    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk:alpine"
     waitFor: ["build-and-push"]
     entrypoint: bash
     args:
@@ -66,29 +69,29 @@ steps:
           exit 0
         fi
 
-        echo "Found jobs to update:"
+        job_count=$(echo "$${jobs}" | wc -l | tr -d ' ')
+        echo "Found $${job_count} jobs to update:"
         echo "$${jobs}" | sed 's/^/  - /'
         echo ""
 
-        # Update each job with the new image
-        job_count=0
-        while IFS= read -r job; do
-          if [ -n "$${job}" ]; then
-            echo "🔄 Updating job: $${job}"
-            gcloud run jobs update "$${job}" \
-              --image="$${IMAGE}" \
-              --region="$_REGION" \
-              --quiet
-            echo "✅ Updated: $${job}"
-            job_count=$$((job_count + 1))
-          fi
-        done <<< "$${jobs}"
+        # Update all jobs in parallel (up to 10 concurrent)
+        echo "$${jobs}" | xargs -P 10 -I {} sh -c '
+          echo "🔄 Updating job: {}"
+          gcloud run jobs update "{}" \
+            --image="'"$${IMAGE}"'" \
+            --region="$_REGION" \
+            --quiet
+          echo "✅ Updated: {}"
+        '
 
         echo ""
         echo "=================================================="
         echo "✅ Successfully updated $${job_count} Cloud Run Job(s)"
         echo "=================================================="
 
-# Logging configuration required when using a service account
+# Build options
 options:
   logging: CLOUD_LOGGING_ONLY
+  # Use faster machine for quicker builds (default: E2_MEDIUM)
+  # Options: E2_MEDIUM, E2_HIGHCPU_8, E2_HIGHCPU_32
+  machineType: E2_HIGHCPU_8
