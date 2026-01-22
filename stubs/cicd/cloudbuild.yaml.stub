@@ -1,27 +1,22 @@
 steps:
-  # Step 1: Build and push Docker image to Artifact Registry
-  # Uses registry-based caching for faster incremental builds
-  - id: "build-and-push"
+  # Step 1: Build and push Docker image with layer caching
+  - id: "build"
     name: "gcr.io/cloud-builders/docker"
     entrypoint: bash
     args:
       - '-c'
       - |
-        # Build and push Docker image with layer caching
-        docker buildx build \
-          --push \
-          --cache-from type=registry,ref=$_REGION-docker.pkg.dev/$_PROJECT/$_CLIENT-$_APP-$_ENVIRONMENT/$_SERVICE:cache \
-          --cache-to type=registry,ref=$_REGION-docker.pkg.dev/$_PROJECT/$_CLIENT-$_APP-$_ENVIRONMENT/$_SERVICE:cache,mode=max \
-          --file docker/Dockerfile \
-          -t "$_REGION-docker.pkg.dev/$_PROJECT/$_CLIENT-$_APP-$_ENVIRONMENT/$_SERVICE:latest" \
-          .
+        IMAGE="$_REGION-docker.pkg.dev/$_PROJECT/$_CLIENT-$_APP-$_ENVIRONMENT/$_SERVICE:latest"
+        docker pull "$$IMAGE" || true
+        docker build --cache-from "$$IMAGE" -t "$$IMAGE" -f docker/Dockerfile .
+        docker push "$$IMAGE"
 
   # Step 2: Update Cloud Run Service with new image
   # Only updates the image, all other configuration is managed by Terraform
   # Runs in parallel with update_jobs after build completes
   - id: "update_service"
     name: "gcr.io/google.com/cloudsdktool/cloud-sdk:alpine"
-    waitFor: ["build-and-push"]
+    waitFor: ["build"]
     entrypoint: gcloud
     args:
       - "run"
@@ -39,7 +34,7 @@ steps:
   # Runs in parallel with update_service after build completes
   - id: "update_jobs"
     name: "gcr.io/google.com/cloudsdktool/cloud-sdk:alpine"
-    waitFor: ["build-and-push"]
+    waitFor: ["build"]
     entrypoint: bash
     args:
       - '-c'
