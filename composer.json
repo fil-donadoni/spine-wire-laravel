@@ -1,0 +1,23 @@
+{
+    "name": "fil-donadoni/spine-wire-laravel",
+    "description": "Deployment files for Laravel applications on GCP Cloud Run. Companion to spine-core.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^11.0|^12.0",
+        "google/cloud-logging": "^1.34"
+    },
+    "autoload": {
+        "psr-4": {
+            "FilDonadoni\\SpineWireLaravel\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "FilDonadoni\\SpineWireLaravel\\DevOpsServiceProvider"
+            ]
+        }
+    }
+}

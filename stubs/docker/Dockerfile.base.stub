@@ -1,0 +1,92 @@
+# =============================================================================
+# Dockerfile.base - Pre-compiled base image for Laravel GCP DevOps Kit
+# =============================================================================
+# This image contains all system dependencies and PHP extensions pre-installed.
+# It dramatically speeds up application builds (~70-80% faster).
+#
+# Rebuild this image when:
+#   - Upgrading PHP version
+#   - Adding/removing PHP extensions
+#   - Adding/removing system packages
+#   - Updating FrankenPHP version
+#
+# This image is built and managed via GCP DevOps Manager.
+# Manual build (if needed):
+#   docker build -f docker/Dockerfile.base -t {{GCP_REGION}}-docker.pkg.dev/{{PROJECT_ID}}/{{CLIENT_NAME}}-{{APP_NAME}}-base/laravel-base:php8.4-alpine .
+#   docker push {{GCP_REGION}}-docker.pkg.dev/{{PROJECT_ID}}/{{CLIENT_NAME}}-{{APP_NAME}}-base/laravel-base:php8.4-alpine
+# =============================================================================
+
+FROM dunglas/frankenphp:php8.4-alpine
+
+# Install system dependencies and build tools
+RUN apk update && apk add --no-cache \
+    # Database drivers
+    postgresql-dev \
+    postgresql-client \
+    libpq \
+    # Compression libraries
+    zlib-dev \
+    libzip-dev \
+    libzip \
+    # Image processing libraries
+    libpng-dev \
+    libpng \
+    libjpeg-turbo-dev \
+    libjpeg-turbo \
+    freetype-dev \
+    freetype \
+    libavif-dev \
+    libavif \
+    libwebp-dev \
+    libwebp \
+    libxpm \
+    # ImageMagick (for imagick extension)
+    imagemagick-dev \
+    imagemagick \
+    imagemagick-libs \
+    # Internationalization
+    icu-dev \
+    icu-libs \
+    # Essential tools
+    curl \
+    git \
+    unzip \
+    # Build tools (needed for PHP extensions compilation)
+    autoconf \
+    g++ \
+    make \
+    linux-headers \
+    libc-dev \
+    && rm -rf /var/cache/apk/*
+
+# Install and configure PHP extensions
+# All common extensions are pre-compiled here for speed
+RUN install-php-extensions \
+    zip \
+    pdo_pgsql \
+    pgsql \
+    gd \
+    pcntl \
+    sockets \
+    opcache \
+    intl \
+    imagick \
+    redis
+
+# Install Composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+# Set working directory
+WORKDIR /var/www
+
+# Verify installation
+RUN php -v && \
+    php -m && \
+    composer --version
+
+# Metadata
+LABEL maintainer="Laravel GCP DevOps Kit"
+LABEL description="Pre-compiled base image for Laravel applications on GCP"
+LABEL php.version="8.4"
+LABEL frankenphp.base="dunglas/frankenphp:php8.4-alpine"
+LABEL extensions="zip,pdo_pgsql,pgsql,gd,pcntl,sockets,opcache,intl,imagick,redis"

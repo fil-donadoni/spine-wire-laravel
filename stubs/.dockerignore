@@ -1,0 +1,40 @@
+# Git
+.git/
+.gitignore
+
+# Environment files (secrets managed separately)
+.env
+.env.*
+!.env.example
+
+# Dependencies - installed during Docker build
+node_modules/
+vendor/
+
+# Laravel cache/logs - exclude contents, keep directories
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+bootstrap/cache/*
+
+# Testing
+.phpunit.result.cache
+tests/
+
+# Local/IDE
+.DS_Store
+*.log
+
+# Infrastructure
+terraform/
+.terraform/
+*.tfstate
+*.tfvars
+!terraform.tfvars.example
+
+# Docker/CI configs (not needed inside container)
+docker-compose.yml
+
+# Documentation
+*.md

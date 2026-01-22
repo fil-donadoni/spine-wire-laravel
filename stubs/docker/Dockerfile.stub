@@ -1,0 +1,134 @@
+# =============================================================================
+# Laravel Application Dockerfile
+# =============================================================================
+# Uses pre-compiled base image for fast builds (~70-80% faster)
+# Base image contains: PHP extensions, Composer, system dependencies
+#
+# Base image is built and managed via GCP DevOps Manager.
+# For local development without base image, use:
+#   docker build --build-arg BASE_IMAGE=dunglas/frankenphp:php8.4-alpine -f docker/Dockerfile .
+# =============================================================================
+
+# Base image - override with: docker build --build-arg BASE_IMAGE=...
+ARG BASE_IMAGE={{GCP_REGION}}-docker.pkg.dev/{{PROJECT_ID}}/{{CLIENT_NAME}}-{{APP_NAME}}-base/laravel-base:php8.4-alpine
+
+{{#IF:ENABLE_FRONTEND}}
+# -----------------------------------------------------------------------------
+# Stage 1: Node.js builder - Compile frontend assets
+# -----------------------------------------------------------------------------
+FROM node:{{NODE_VERSION}}-alpine AS node-builder
+
+WORKDIR /app
+
+# Copy package manager files
+COPY package.json package-lock.json* pnpm-lock.yaml* ./
+
+{{#IF:USE_PNPM}}
+# Install dependencies with pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN pnpm install --frozen-lockfile
+{{/IF:USE_PNPM}}
+{{#IF:USE_NPM}}
+# Install dependencies with npm
+RUN npm ci
+{{/IF:USE_NPM}}
+
+# Copy source files needed for build
+COPY resources ./resources
+COPY vite.config.* webpack.mix.* tsconfig.* postcss.config.* tailwind.config.* ./
+
+# Copy artisan for Laravel Mix detection (Mix uses this to auto-set publicPath)
+# Using wildcard so it doesn't fail if artisan doesn't exist (e.g., non-Laravel projects)
+COPY artisan* ./
+
+# Create public directory for build output (Vite/Mix will output here)
+RUN mkdir -p public
+
+{{#IF:USE_PNPM}}
+RUN pnpm run {{NPM_BUILD_SCRIPT}}
+{{/IF:USE_PNPM}}
+{{#IF:USE_NPM}}
+RUN npm run {{NPM_BUILD_SCRIPT}}
+{{/IF:USE_NPM}}
+
+{{/IF:ENABLE_FRONTEND}}
+# -----------------------------------------------------------------------------
+# Stage: Dependencies - Install Composer packages using pre-built base image
+# -----------------------------------------------------------------------------
+FROM ${BASE_IMAGE} AS dependencies
+
+WORKDIR /var/www
+
+# Install composer dependencies (extensions already in base image)
+COPY composer.json composer.lock ./
+
+RUN --mount=type=cache,target=/root/.composer \
+    composer install --no-dev --no-interaction --optimize-autoloader --no-scripts
+
+# Copy application code
+COPY . .
+
+{{#IF:ENABLE_FRONTEND}}
+# Copy compiled frontend assets from node-builder stage
+# Supports both Vite (public/build) and Laravel Mix (public/js, public/css)
+COPY --from=node-builder /app/public ./public
+{{/IF:ENABLE_FRONTEND}}
+
+RUN chmod -R 777 /var/www/storage /var/www/bootstrap/cache
+
+RUN composer run-script post-install-cmd --no-interaction || true
+
+# -----------------------------------------------------------------------------
+# Stage: Runtime - Lightweight production image
+# -----------------------------------------------------------------------------
+FROM dunglas/frankenphp:php8.4-alpine AS runtime
+
+# Install runtime dependencies only (no build tools = smaller image)
+RUN apk update && apk add --no-cache \
+    postgresql-client \
+    libpq \
+    libzip \
+    libpng \
+    libjpeg-turbo \
+    freetype \
+    libavif \
+    libwebp \
+    libxpm \
+    icu-libs \
+{{#IF:ENABLE_IMAGICK}}
+    imagemagick \
+    imagemagick-libs \
+    libgomp \
+{{/IF:ENABLE_IMAGICK}}
+    && rm -rf /var/cache/apk/*
+
+# Copy pre-built PHP extensions from dependencies stage (already compiled in base image)
+COPY --from=dependencies /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
+COPY --from=dependencies /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
+
+{{#IF:DISABLE_IMAGICK}}
+# Remove imagick extension config (not enabled for this project)
+RUN rm -f /usr/local/etc/php/conf.d/*imagick*.ini \
+    && rm -f /usr/local/lib/php/extensions/*/*imagick*.so
+{{/IF:DISABLE_IMAGICK}}
+
+WORKDIR /var/www
+
+# Copy application with dependencies
+COPY --from=dependencies /var/www ./
+
+RUN chmod -R 777 /var/www/storage /var/www/bootstrap/cache
+
+# Copy PHP configuration
+COPY docker/php/php.ini /usr/local/etc/php/conf.d/99-custom.ini
+
+# Copy entrypoints
+COPY docker/entrypoints/job-entrypoint.sh /job-entrypoint.sh
+COPY docker/entrypoints/service-entrypoint.sh /service-entrypoint.sh
+COPY docker/entrypoints/queue-entrypoint.sh /queue-entrypoint.sh
+
+RUN chmod +x /job-entrypoint.sh /service-entrypoint.sh /queue-entrypoint.sh
+
+EXPOSE 8080
+
+CMD ["/service-entrypoint.sh"]

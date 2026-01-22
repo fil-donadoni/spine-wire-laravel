@@ -1,0 +1,41 @@
+# Dependencies
+/vendor/
+
+# Composer
+composer.lock
+
+# IDE
+/.idea/
+/.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+/.phpunit.result.cache
+/.phpunit.cache/
+/coverage/
+.phpunit.result.cache
+
+# Build artifacts
+/build/
+/dist/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Local development
+.php-cs-fixer.cache
+phpstan.neon
+phpunit.xml
+
+# Claude Code local settings
+/.claude/

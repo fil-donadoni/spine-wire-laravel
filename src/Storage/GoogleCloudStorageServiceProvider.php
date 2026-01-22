@@ -1,0 +1,71 @@
+<?php
+
+namespace FilDonadoni\SpineWireLaravel\Storage;
+
+use Google\Cloud\Storage\StorageClient;
+use Illuminate\Support\ServiceProvider;
+
+/**
+ * Google Cloud Storage integration for Laravel
+ *
+ * Uses Application Default Credentials (ADC) for authentication.
+ * Works seamlessly in both Cloud Run and local development with zero configuration.
+ *
+ * Authentication:
+ * - Cloud Run: Automatically uses service account identity
+ * - Local: Run `gcloud auth application-default login` once
+ *
+ * Prerequisites:
+ * - Service account needs appropriate Storage IAM roles:
+ *   - "roles/storage.objectViewer" for read access
+ *   - "roles/storage.objectCreator" for write access
+ *   - "roles/storage.objectAdmin" for full access
+ *
+ * Usage:
+ * ```php
+ * $storage = app('gcp.storage');
+ * $bucket = $storage->bucket('my-bucket');
+ * $bucket->upload(fopen('/path/to/file.txt', 'r'));
+ * ```
+ */
+class GoogleCloudStorageServiceProvider extends ServiceProvider
+{
+    /**
+     * Register Google Cloud Storage client with ADC
+     */
+    public function register(): void
+    {
+        // Create the singleton instance
+        $this->app->singleton(StorageClient::class, function () {
+            // Use Application Default Credentials (ADC)
+            // No credentials specified = automatic authentication
+            // - Cloud Run: uses service account identity
+            // - Local: uses `gcloud auth application-default login`
+            $config = [];
+
+            // Only set projectId if available (ADC can auto-detect it)
+            $projectId = getenv('GOOGLE_CLOUD_PROJECT');
+            if ($projectId) {
+                $config['projectId'] = $projectId;
+            }
+
+            return new StorageClient($config);
+        });
+
+        // Alias string key to same instance (both point to same singleton)
+        $this->app->alias(StorageClient::class, 'gcp.storage');
+    }
+
+    /**
+     * Get the services provided by the provider.
+     *
+     * @return array<int, string>
+     */
+    public function provides(): array
+    {
+        return [
+            'gcp.storage',
+            StorageClient::class,
+        ];
+    }
+}

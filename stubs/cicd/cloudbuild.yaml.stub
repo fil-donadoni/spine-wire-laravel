@@ -1,0 +1,94 @@
+steps:
+  # Step 1: Build and push Docker image to Artifact Registry
+  - id: "build-and-push"
+    name: "gcr.io/cloud-builders/docker"
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        # Build and push Docker image
+        docker buildx build \
+          --push \
+          --file docker/Dockerfile \
+          -t "$_REGION-docker.pkg.dev/$_PROJECT/$_CLIENT-$_APP-$_ENVIRONMENT/$_SERVICE:latest" \
+          .
+
+  # Step 2: Update Cloud Run Service with new image
+  # Only updates the image, all other configuration is managed by Terraform
+  # Runs in parallel with update_jobs after build completes
+  - id: "update_service"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    waitFor: ["build-and-push"]
+    entrypoint: gcloud
+    args:
+      - "run"
+      - "services"
+      - "update"
+      - "$_CLIENT-$_SERVICE-$_ENVIRONMENT"
+      - "--image=$_REGION-docker.pkg.dev/$_PROJECT/$_CLIENT-$_APP-$_ENVIRONMENT/$_SERVICE:latest"
+      - "--region=$_REGION"
+      - "--max-instances=$_MAX_INSTANCES"
+      - "--min-instances=$_MIN_INSTANCES"
+
+  # Step 3: Update Cloud Run Jobs with new image (if any exist)
+  # Automatically discovers jobs based on labels - no manual configuration needed
+  # Jobs are created by Terraform with placeholder image, this step updates them
+  # Runs in parallel with update_service after build completes
+  - id: "update_jobs"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    waitFor: ["build-and-push"]
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        set -e
+
+        IMAGE="$_REGION-docker.pkg.dev/$_PROJECT/$_CLIENT-$_APP-$_ENVIRONMENT/$_SERVICE:latest"
+
+        echo "=================================================="
+        echo "Checking for Cloud Run Jobs to update..."
+        echo "Region: $_REGION"
+        echo "Client: $_CLIENT"
+        echo "Environment: $_ENVIRONMENT"
+        echo "Image: $${IMAGE}"
+        echo "=================================================="
+
+        # Find all jobs for this client/environment using labels
+        # This automatically picks up any jobs created by Terraform
+        jobs=$(gcloud run jobs list \
+          --region="$_REGION" \
+          --filter="metadata.labels.client=$_CLIENT AND metadata.labels.environment=$_ENVIRONMENT" \
+          --format="value(metadata.name)" 2>/dev/null || echo "")
+
+        if [ -z "$${jobs}" ]; then
+          echo "ℹ️  No Cloud Run Jobs found for this environment"
+          echo "   (This is normal if scheduled_jobs feature is not enabled)"
+          exit 0
+        fi
+
+        echo "Found jobs to update:"
+        echo "$${jobs}" | sed 's/^/  - /'
+        echo ""
+
+        # Update each job with the new image
+        job_count=0
+        while IFS= read -r job; do
+          if [ -n "$${job}" ]; then
+            echo "🔄 Updating job: $${job}"
+            gcloud run jobs update "$${job}" \
+              --image="$${IMAGE}" \
+              --region="$_REGION" \
+              --quiet
+            echo "✅ Updated: $${job}"
+            job_count=$$((job_count + 1))
+          fi
+        done <<< "$${jobs}"
+
+        echo ""
+        echo "=================================================="
+        echo "✅ Successfully updated $${job_count} Cloud Run Job(s)"
+        echo "=================================================="
+
+# Logging configuration required when using a service account
+options:
+  logging: CLOUD_LOGGING_ONLY
