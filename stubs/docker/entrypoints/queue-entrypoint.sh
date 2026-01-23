@@ -6,7 +6,7 @@
 cd /var/www
 
 # Memory limit for queue worker (in MB)
-# Derived from QUEUE_WORKER_MEMORY env var, defaults to 512MB
+# Derived from QUEUE_WORKER_MEMORY env var (set by Terraform as 80% of container memory)
 MEMORY_LIMIT=${QUEUE_WORKER_MEMORY:-512}
 
 # Start queue worker with timeout
