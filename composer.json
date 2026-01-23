@@ -5,7 +5,9 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
-        "illuminate/support": "^11.0|^12.0"
+        "illuminate/support": "^11.0|^12.0",
+        "google/cloud-storage": "^1.30",
+        "google/cloud-pubsub": "^2.0"
     },
     "autoload": {
         "psr-4": {
@@ -15,7 +17,9 @@
     "extra": {
         "laravel": {
             "providers": [
-                "FilDonadoni\\SpineWireLaravel\\DevOpsServiceProvider"
+                "FilDonadoni\\SpineWireLaravel\\DevOpsServiceProvider",
+                "FilDonadoni\\SpineWireLaravel\\Storage\\GoogleCloudStorageServiceProvider",
+                "FilDonadoni\\SpineWireLaravel\\PubSub\\GoogleCloudPubSubServiceProvider"
             ]
         }
     }

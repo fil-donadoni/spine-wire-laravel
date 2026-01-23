@@ -4,16 +4,12 @@ Deployment files for Laravel applications on Google Cloud Platform (Cloud Run). 
 
 ## Overview
 
-This package provides deployment configuration for Laravel applications running on GCP Cloud Run:
+This package provides:
 
 - **Docker Configuration**: Multi-stage Dockerfile with FrankenPHP + Octane
-  - Optional Node.js support (Vite, npm/pnpm)
-  - Optional ImageMagick for image processing
-  - Optional Redis PHP extension
-  - Pre-compiled base image support for 70-80% faster builds
 - **CI/CD Pipeline**: Cloud Build configuration for automated deployments
 - **Health Check**: Controller and service for Cloud Run probes
-- **Logging**: Simple stderr-based logging (Cloud Run captures automatically)
+- **GCP Clients**: Pre-configured Cloud Storage and Pub/Sub clients
 
 ## Architecture
 
@@ -21,39 +17,16 @@ This package is the **deployment companion** to [Spine Core](https://github.com/
 
 | Component | Responsibility |
 |-----------|----------------|
-| **Spine Wire Laravel** (this package) | Docker, cloudbuild.yaml, health check |
-| **Spine Core** | Terraform infrastructure, base image builds, configuration UI |
+| **Spine Wire Laravel** | Docker, cloudbuild.yaml, health check, GCP clients |
+| **Spine Core** | Terraform infrastructure, environment variables, secrets |
 
-### Deployment Flow
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Spine Core                                                 │
-│  1. Terraform → Cloud Run, Artifact Registry, IAM, etc.     │
-│  2. Build and push base Docker image                        │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Laravel Project + Spine Wire                               │
-│  php artisan devops:setup → Dockerfile, cloudbuild.yaml     │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Cloud Build (CI/CD)                                        │
-│  1. Pull base image (from Artifact Registry)                │
-│  2. Build application image                                 │
-│  3. Deploy to Cloud Run                                     │
-└─────────────────────────────────────────────────────────────┘
-```
+**Important**: All environment variables (`APP_ENV`, `DB_*`, `GOOGLE_CLOUD_PROJECT`, `LOG_CHANNEL`, etc.) are configured by Terraform via Spine Core. No manual `.env` configuration is needed in production.
 
 ## Requirements
 
-- **PHP**: ^8.2
-- **Laravel**: ^11.0 or ^12.0
-- **GCP Account**: With infrastructure provisioned via Spine Core
-- **Docker**: For local development
+- PHP ^8.2
+- Laravel ^11.0 or ^12.0
+- Infrastructure provisioned via [Spine Core](https://github.com/fil-donadoni/spine-core)
 
 ## Installation
 
@@ -63,136 +36,169 @@ composer require fil-donadoni/spine-wire-laravel --dev
 
 ## Setup
 
-Run the interactive setup wizard:
-
 ```bash
 php artisan devops:setup
 ```
 
-You'll be prompted for:
-- **GCP Project ID**: Your Google Cloud project ID
-- **Client Name**: Used for resource naming (defaults to directory name)
-- **GCP Region**: Deployment region (default: europe-west1)
-- **App Name**: Application name (default: backend)
-- **Docker Configuration**:
-  - Node.js for frontend builds (with version selection)
-  - Package manager (npm/pnpm)
-  - ImageMagick for image processing
-  - Redis PHP extension
+The command reads `GOOGLE_CLOUD_PROJECT` from your `.env` if available, otherwise prompts for it.
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--project-id` | GCP Project ID (reads from `GOOGLE_CLOUD_PROJECT` env if not provided) |
+| `--client-name` | Client name for resource naming (required) |
+| `--region` | GCP region (default: europe-west1) |
+| `--app-name` | Application name (default: backend) |
+| `--force` | Overwrite existing files |
+| `--ignore-extras` | Skip Docker feature prompts |
 
 ### Generated Files
 
 ```
 your-laravel-project/
 ├── docker/
-│   ├── Dockerfile           # Application Dockerfile
-│   ├── Dockerfile.base      # Base image template
-│   ├── entrypoints/         # Service entrypoints
+│   ├── Dockerfile
+│   ├── Dockerfile.base
+│   ├── entrypoints/
 │   │   ├── service-entrypoint.sh
 │   │   ├── queue-entrypoint.sh
 │   │   └── job-entrypoint.sh
 │   └── php/
 │       └── php.ini
-├── cloudbuild.yaml          # CI/CD pipeline
+├── cloudbuild.yaml
 ├── .dockerignore
 ├── app/
-│   ├── Http/Controllers/
-│   │   └── HealthCheckController.php
-│   └── Services/
-│       └── HealthCheckService.php
-└── routes/web.php           # (modified: /health route added)
+│   ├── Http/Controllers/HealthCheckController.php
+│   └── Services/HealthCheckService.php
+└── routes/web.php  # /health route added
 ```
 
-### Command Options
+## Configuration
+
+### Environment Variables (.env)
+
+```env
+GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+GCS_BUCKET=your-bucket-name
+```
+
+### config/filesystems.php (optional)
+
+To use Cloud Storage as a Laravel filesystem disk, install the Spatie package:
 
 ```bash
-php artisan devops:setup \
-    --project-id=my-gcp-project \
-    --client-name=my-client \
-    --region=europe-west1 \
-    --app-name=backend \
-    --force \
-    --ignore-extras
+composer require spatie/laravel-google-cloud-storage
 ```
 
-| Option | Description |
-|--------|-------------|
-| `--project-id` | GCP Project ID (required) |
-| `--client-name` | Client name for resource naming |
-| `--region` | GCP region (default: europe-west1) |
-| `--app-name` | Application name (default: backend) |
-| `--force` | Overwrite existing files |
-| `--ignore-extras` | Skip Docker feature prompts (use defaults) |
+Then add a disk in `config/filesystems.php`:
+
+```php
+'disks' => [
+    // ... other disks ...
+
+    'gcs' => [
+        'driver' => 'gcs',
+        'project_id' => env('GOOGLE_CLOUD_PROJECT'),
+        'bucket' => env('GCS_BUCKET'),
+        'path_prefix' => env('GCS_PATH_PREFIX', ''),
+        'visibility' => 'public',
+        // Uses Application Default Credentials (ADC) - no key file needed
+    ],
+],
+```
+
+Usage:
+
+```php
+Storage::disk('gcs')->put('path/file.txt', $contents);
+Storage::disk('gcs')->get('path/file.txt');
+```
 
 ## Local Development
 
-### Build Without Base Image
-
-For local testing without the pre-built base image:
+Authenticate with GCP:
 
 ```bash
+gcloud auth application-default login
+```
+
+### Build and Run
+
+```bash
+# Build without base image
 docker build \
   --build-arg BASE_IMAGE=dunglas/frankenphp:php8.4-alpine \
   -f docker/Dockerfile \
   -t my-app .
-```
 
-### Run Locally
-
-```bash
-# Web server
+# Run web server
 docker run -p 8080:8080 my-app
 
-# Queue worker
+# Run queue worker
 docker run my-app /queue-entrypoint.sh
 
-# Custom command
-docker run my-app php artisan tinker
-```
-
-### Test Health Check
-
-```bash
+# Test health check
 curl http://localhost:8080/health
 ```
 
-## Logging
+## GCP Services
 
-Cloud Run automatically captures stdout/stderr and sends them to Cloud Logging. No special configuration needed.
+The package registers `StorageClient` and `PubSubClient` as singletons using Application Default Credentials (ADC).
 
-### Configuration
-
-Set `LOG_CHANNEL=stderr` in your environment. Laravel's built-in stderr channel works perfectly:
-
-```env
-LOG_CHANNEL=stderr
-LOG_LEVEL=debug
-```
-
-That's it. All `Log::info()`, `Log::error()`, etc. calls will appear in Cloud Logging automatically.
-
-### Usage
+### Cloud Storage
 
 ```php
-use Illuminate\Support\Facades\Log;
+use Google\Cloud\Storage\StorageClient;
 
-Log::info('User logged in', ['user_id' => $user->id]);
-Log::error('Payment failed', ['order_id' => $order->id]);
+// Via dependency injection
+public function __construct(private StorageClient $storage) {}
+
+// Via app helper
+$storage = app('gcp.storage');
+
+// Upload
+$bucket = $storage->bucket('my-bucket');
+$bucket->upload(fopen('/path/to/file.txt', 'r'), [
+    'name' => 'destination/file.txt'
+]);
+
+// Download
+$object = $bucket->object('path/to/file.txt');
+$contents = $object->downloadAsString();
+
+// Signed URL
+$url = $object->signedUrl(new \DateTime('+1 hour'));
 ```
 
-Logs appear in Cloud Logging under `run.googleapis.com/stdout` or `run.googleapis.com/stderr`.
+### Pub/Sub
+
+```php
+use Google\Cloud\PubSub\PubSubClient;
+
+// Via dependency injection
+public function __construct(private PubSubClient $pubsub) {}
+
+// Via app helper
+$pubsub = app('gcp.pubsub');
+
+// Publish
+$topic = $pubsub->topic('my-topic');
+$topic->publish([
+    'data' => json_encode(['event' => 'user.created', 'user_id' => 123])
+]);
+
+// Pull messages
+$subscription = $pubsub->subscription('my-subscription');
+$messages = $subscription->pull(['maxMessages' => 10]);
+
+foreach ($messages as $message) {
+    $data = json_decode($message->data(), true);
+    $subscription->acknowledge($message);
+}
+```
 
 ## Deployment
-
-### Prerequisites
-
-Before deploying, ensure infrastructure is provisioned via **Spine Core**:
-1. Cloud Run service created
-2. Artifact Registry repositories created
-3. Base image built and pushed
-4. IAM permissions configured
-
-### Deploy via Cloud Build
 
 Push to your repository to trigger Cloud Build, or manually:
 
@@ -200,19 +206,6 @@ Push to your repository to trigger Cloud Build, or manually:
 gcloud builds submit --config=cloudbuild.yaml
 ```
 
-## Security
-
-- Never commit `.env` files with real credentials
-- Use GCP Secret Manager for sensitive data (configured via Spine Core)
-- Regularly update base images for security patches
-
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details
-
-## Credits
-
-Built with:
-- [FrankenPHP](https://frankenphp.dev/)
-- [Laravel Octane](https://laravel.com/docs/octane)
-- [Google Cloud Platform](https://cloud.google.com/)
+MIT License

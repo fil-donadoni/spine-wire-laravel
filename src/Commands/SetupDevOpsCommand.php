@@ -79,13 +79,21 @@ class SetupDevOpsCommand extends Command
         $this->line('Please provide the following information:');
         $this->newLine();
 
-        // GCP Project ID (required)
-        $this->config['project_id'] = $this->getConfigValue(
-            'project-id',
-            'GCP Project ID (required)',
-            null,
-            true
-        );
+        // GCP Project ID (required) - check .env first
+        $envProjectId = env('GOOGLE_CLOUD_PROJECT');
+
+        if ($this->option('project-id')) {
+            // Explicit option takes precedence
+            $this->config['project_id'] = $this->option('project-id');
+            $this->line("  <fg=green>✓</> GCP Project ID (required): <comment>{$this->config['project_id']}</comment>");
+        } elseif ($envProjectId) {
+            // Found in .env, use it automatically
+            $this->config['project_id'] = $envProjectId;
+            $this->line("  <fg=green>✓</> GCP Project ID (from .env): <comment>{$this->config['project_id']}</comment>");
+        } else {
+            // Ask the user
+            $this->config['project_id'] = $this->ask('GCP Project ID (required)');
+        }
 
         if (empty($this->config['project_id'])) {
             $this->error('GCP Project ID is required.');
