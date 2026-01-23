@@ -5,6 +5,10 @@
 
 cd /var/www
 
+# Memory limit for queue worker (in MB)
+# Derived from QUEUE_WORKER_MEMORY env var, defaults to 512MB
+MEMORY_LIMIT=${QUEUE_WORKER_MEMORY:-512}
+
 # Start queue worker with timeout
 # The --max-time flag ensures worker stops before Cloud Run job timeout
-exec php artisan queue:work --stop-when-empty --max-time=240 --timeout=300 --tries=1
+exec php artisan queue:work --stop-when-empty --max-time=240 --timeout=300 --tries=1 --memory=${MEMORY_LIMIT}
