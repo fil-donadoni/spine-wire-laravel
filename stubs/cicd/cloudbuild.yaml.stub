@@ -87,6 +87,3 @@ steps:
 # Build options
 options:
   logging: CLOUD_LOGGING_ONLY
-  # Use faster machine for quicker builds (default: E2_MEDIUM)
-  # Options: E2_MEDIUM, E2_HIGHCPU_8, E2_HIGHCPU_32
-  machineType: E2_HIGHCPU_8

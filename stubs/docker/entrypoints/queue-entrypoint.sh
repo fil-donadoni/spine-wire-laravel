@@ -7,4 +7,4 @@ cd /var/www
 
 # Start queue worker with timeout
 # The --max-time flag ensures worker stops before Cloud Run job timeout
-exec php artisan queue:work --stop-when-empty --max-time=240 --tries=1
+exec php artisan queue:work --stop-when-empty --max-time=240 --timeout=300 --tries=1
