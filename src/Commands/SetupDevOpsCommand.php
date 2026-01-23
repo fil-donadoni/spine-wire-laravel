@@ -127,11 +127,17 @@ class SetupDevOpsCommand extends Command
         );
 
         // App Name
-        $this->config['app_name'] = $this->getConfigValue(
+        $appNameInput = $this->getConfigValue(
             'app-name',
             'Application name',
             config('devops.defaults.app_name', 'backend')
         );
+
+        $this->config['app_name'] = Str::slug($appNameInput);
+
+        if ($this->config['app_name'] !== $appNameInput) {
+            $this->comment("App name sanitized to: {$this->config['app_name']}");
+        }
 
         // Docker Configuration
         if ($this->option('ignore-extras')) {
