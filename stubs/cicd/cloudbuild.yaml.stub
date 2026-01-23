@@ -1,14 +1,19 @@
 steps:
   # Step 1: Build and push Docker image with layer caching
+  # DOCKER_BUILDKIT=1: Required because Dockerfile uses --mount=type=cache (BuildKit feature)
+  #                    Also provides more precise cache invalidation based on file checksums
+  # BUILDKIT_INLINE_CACHE=1: Embeds cache metadata in image for reliable --cache-from behavior
   - id: "build"
     name: "gcr.io/cloud-builders/docker"
+    env:
+      - 'DOCKER_BUILDKIT=1'
     entrypoint: bash
     args:
       - '-c'
       - |
         IMAGE="$_REGION-docker.pkg.dev/$_PROJECT/$_CLIENT-$_APP-$_ENVIRONMENT/$_SERVICE:latest"
         docker pull "$$IMAGE" || true
-        docker build --cache-from "$$IMAGE" -t "$$IMAGE" -f docker/Dockerfile .
+        docker build --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from "$$IMAGE" -t "$$IMAGE" -f docker/Dockerfile .
         docker push "$$IMAGE"
 
   # Step 2: Update Cloud Run Service with new image
