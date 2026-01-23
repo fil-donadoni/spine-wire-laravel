@@ -13,7 +13,7 @@ This package provides deployment configuration for Laravel applications running 
   - Pre-compiled base image support for 70-80% faster builds
 - **CI/CD Pipeline**: Cloud Build configuration for automated deployments
 - **Health Check**: Controller and service for Cloud Run probes
-- **Google Cloud Logging**: Integrated structured logging
+- **Logging**: Simple stderr-based logging (Cloud Run captures automatically)
 
 ## Architecture
 
@@ -21,7 +21,7 @@ This package is the **deployment companion** to [Spine Core](https://github.com/
 
 | Component | Responsibility |
 |-----------|----------------|
-| **Spine Wire Laravel** (this package) | Docker, cloudbuild.yaml, health check, logging |
+| **Spine Wire Laravel** (this package) | Docker, cloudbuild.yaml, health check |
 | **Spine Core** | Terraform infrastructure, base image builds, configuration UI |
 
 ### Deployment Flow
@@ -156,30 +156,20 @@ docker run my-app php artisan tinker
 curl http://localhost:8080/health
 ```
 
-## Google Cloud Logging
+## Logging
 
-The package includes automatic Cloud Logging integration.
+Cloud Run automatically captures stdout/stderr and sends them to Cloud Logging. No special configuration needed.
 
 ### Configuration
 
-Add to `config/logging.php`:
-
-```php
-'channels' => [
-    'google_cloud' => [
-        'driver' => 'custom',
-        'via' => \FilDonadoni\SpineWireLaravel\Logging\GoogleCloudLogger::class,
-        'level' => env('LOG_LEVEL', 'debug'),
-    ],
-],
-```
-
-Set in `.env` (automatically configured in Cloud Run):
+Set `LOG_CHANNEL=stderr` in your environment. Laravel's built-in stderr channel works perfectly:
 
 ```env
-LOG_CHANNEL=google_cloud
-GOOGLE_CLOUD_PROJECT=your-project-id
+LOG_CHANNEL=stderr
+LOG_LEVEL=debug
 ```
+
+That's it. All `Log::info()`, `Log::error()`, etc. calls will appear in Cloud Logging automatically.
 
 ### Usage
 
@@ -189,6 +179,8 @@ use Illuminate\Support\Facades\Log;
 Log::info('User logged in', ['user_id' => $user->id]);
 Log::error('Payment failed', ['order_id' => $order->id]);
 ```
+
+Logs appear in Cloud Logging under `run.googleapis.com/stdout` or `run.googleapis.com/stderr`.
 
 ## Deployment
 

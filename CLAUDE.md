@@ -11,7 +11,7 @@ Questo documento contiene le linee guida operative per lavorare sul package **Sp
 - **Docker**: Dockerfile con FrankenPHP + Octane, entrypoints per web/queue/jobs
 - **CI/CD**: cloudbuild.yaml per Cloud Build
 - **Health Check**: Controller e Service copiati nel progetto target + route in web.php
-- **Service Providers**: Google Cloud Logging, Storage, PubSub
+- **Service Providers**: Storage, PubSub
 
 ### Cosa NON Fornisce (Gestito dall'App Companion)
 
@@ -25,7 +25,7 @@ Per Terraform e infrastructure-as-code, usa l'app companion:
 - **Backend**: PHP ^8.2, Laravel ^11.0|^12.0
 - **Container**: Docker, FrankenPHP + Octane
 - **Cloud**: Google Cloud Platform (Cloud Run)
-- **Dipendenze**: google/cloud-logging
+- **Dipendenze**: nessuna dipendenza GCP specifica (logging via stderr)
 
 ---
 
@@ -37,8 +37,6 @@ spine-wire-laravel/
 │   ├── Commands/
 │   │   └── SetupDevOpsCommand.php    # Comando artisan
 │   ├── DevOpsServiceProvider.php     # Service provider principale
-│   ├── Logging/
-│   │   └── GoogleCloudLogger.php
 │   ├── PubSub/
 │   │   └── GoogleCloudPubSubServiceProvider.php
 │   └── Storage/
