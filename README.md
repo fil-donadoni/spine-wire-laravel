@@ -29,6 +29,18 @@ This package is the **deployment companion** to [Spine Core](https://github.com/
 - Infrastructure provisioned via [Spine Core](https://github.com/fil-donadoni/spine-core)
 
 ## Installation
+Add this repository to your `composer.json`:
+
+```bash title="composer.json"
+"repositories": [
+    {
+        "type": "vcs",
+        "url": "https://github.com/fil-donadoni/spine-wire-laravel"
+    }
+]
+```
+
+Then
 
 ```bash
 composer require fil-donadoni/spine-wire-laravel --dev
