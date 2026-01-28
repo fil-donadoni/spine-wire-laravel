@@ -19,7 +19,8 @@
 FROM dunglas/frankenphp:php8.4-alpine
 
 # Install system dependencies and build tools
-RUN apk update && apk add --no-cache \
+# Note: apk upgrade ensures latest security patches (e.g., openssl CVEs)
+RUN apk update && apk upgrade && apk add --no-cache \
     # Database drivers
     postgresql-dev \
     postgresql-client \

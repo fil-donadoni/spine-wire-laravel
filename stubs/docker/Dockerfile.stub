@@ -84,7 +84,8 @@ RUN composer run-script post-install-cmd --no-interaction || true
 FROM dunglas/frankenphp:php8.4-alpine AS runtime
 
 # Install runtime dependencies only (no build tools = smaller image)
-RUN apk update && apk add --no-cache \
+# Note: apk upgrade ensures latest security patches (e.g., openssl CVEs)
+RUN apk update && apk upgrade && apk add --no-cache \
     postgresql-client \
     libpq \
     libzip \
