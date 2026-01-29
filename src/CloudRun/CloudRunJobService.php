@@ -17,7 +17,7 @@ class CloudRunJobService
         $url = "https://run.googleapis.com/v2/projects/{$this->projectId}/locations/{$this->region}/jobs/{$jobName}:run";
 
         $response = Http::withToken($this->getAccessToken())
-            ->post($url);
+            ->post($url, []);
 
         $response->throw();
     }
