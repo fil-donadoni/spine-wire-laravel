@@ -43,7 +43,7 @@ Add this repository to your `composer.json`:
 Then
 
 ```bash
-composer require fil-donadoni/spine-wire-laravel --dev
+composer require fil-donadoni/spine-wire-laravel
 ```
 
 ## Setup
