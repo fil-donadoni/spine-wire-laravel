@@ -6,6 +6,7 @@
     "require": {
         "php": "^8.2",
         "illuminate/support": "^11.0|^12.0",
+        "google/apiclient": "^2.18",
         "google/cloud-storage": "^1.30",
         "google/cloud-pubsub": "^2.0"
     },
@@ -19,7 +20,8 @@
             "providers": [
                 "FilDonadoni\\SpineWireLaravel\\DevOpsServiceProvider",
                 "FilDonadoni\\SpineWireLaravel\\Storage\\GoogleCloudStorageServiceProvider",
-                "FilDonadoni\\SpineWireLaravel\\PubSub\\GoogleCloudPubSubServiceProvider"
+                "FilDonadoni\\SpineWireLaravel\\PubSub\\GoogleCloudPubSubServiceProvider",
+                "FilDonadoni\\SpineWireLaravel\\CloudRun\\CloudRunServiceProvider"
             ]
         }
     }

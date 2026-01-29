@@ -11,7 +11,7 @@ Questo documento contiene le linee guida operative per lavorare sul package **Sp
 - **Docker**: Dockerfile con FrankenPHP + Octane, entrypoints per web/queue/jobs
 - **CI/CD**: cloudbuild.yaml per Cloud Build
 - **Health Check**: Controller e Service copiati nel progetto target + route in web.php
-- **Service Providers**: Storage, PubSub
+- **Service Providers**: Storage, PubSub, Cloud Run Jobs
 
 ### Cosa NON Fornisce (Gestito dall'App Companion)
 
@@ -25,7 +25,7 @@ Per Terraform e infrastructure-as-code, usa l'app companion:
 - **Backend**: PHP ^8.2, Laravel ^11.0|^12.0
 - **Container**: Docker, FrankenPHP + Octane
 - **Cloud**: Google Cloud Platform (Cloud Run)
-- **Dipendenze**: nessuna dipendenza GCP specifica (logging via stderr)
+- **Dipendenze**: `google/apiclient` per ADC (Cloud Run Jobs), `google/cloud-storage`, `google/cloud-pubsub`
 
 ---
 
@@ -37,6 +37,9 @@ spine-wire-laravel/
 │   ├── Commands/
 │   │   └── SetupDevOpsCommand.php    # Comando artisan
 │   ├── DevOpsServiceProvider.php     # Service provider principale
+│   ├── CloudRun/
+│   │   ├── CloudRunJobService.php          # Trigger Cloud Run Jobs on-demand
+│   │   └── CloudRunServiceProvider.php     # Registra singleton
 │   ├── PubSub/
 │   │   └── GoogleCloudPubSubServiceProvider.php
 │   └── Storage/
@@ -134,6 +137,55 @@ RUN apk add imagemagick
 RUN docker-php-ext-install redis
 {{/IF:ENABLE_REDIS}}
 ```
+
+---
+
+## Cloud Run Jobs
+
+Permette di triggerare Cloud Run Jobs on-demand via API, senza bisogno di queue worker o Pub/Sub.
+
+### Prerequisiti
+
+1. Aggiungere la configurazione Google in `config/services.php`:
+
+```php
+'google' => [
+    'project_id' => env('GOOGLE_CLOUD_PROJECT'),
+    'region' => env('GCP_REGION', 'europe-west1'),
+],
+```
+
+2. Variabili d'ambiente:
+
+```env
+GOOGLE_CLOUD_PROJECT=my-project-123456
+GCP_REGION=europe-west1  # opzionale, default: europe-west1
+```
+
+3. IAM: il service account di Cloud Run deve avere `roles/run.invoker` sul job target.
+
+4. Autenticazione:
+   - **Cloud Run**: automatica (service account identity)
+   - **Locale**: `gcloud auth application-default login`
+
+### Utilizzo
+
+```php
+use FilDonadoni\SpineWireLaravel\CloudRun\CloudRunJobService;
+
+// Via dependency injection
+public function import(CloudRunJobService $cloudRunJobService)
+{
+    $cloudRunJobService->run('my-cloud-run-job-name');
+
+    return response()->json([], 202);
+}
+
+// Via container
+app(CloudRunJobService::class)->run('my-cloud-run-job-name');
+```
+
+Il metodo `run()` chiama la Cloud Run Admin API v2 (`jobs/:run`) e lancia un'eccezione se la chiamata fallisce.
 
 ---
 
@@ -269,12 +321,14 @@ docker build -f docker/Dockerfile -t test .
 
 ### File Chiave
 
-- `src/Commands/SetupDevOpsCommand.php`: Logica principale
+- `src/Commands/SetupDevOpsCommand.php`: Logica principale devops:setup
+- `src/CloudRun/CloudRunJobService.php`: Trigger Cloud Run Jobs on-demand
+- `src/CloudRun/CloudRunServiceProvider.php`: Service provider Cloud Run
 - `stubs/docker/Dockerfile.stub`: Template Dockerfile
 - `stubs/cicd/cloudbuild.yaml.stub`: Template Cloud Build
 - `config/devops.php`: Configurazione package
 
 ---
 
-**Versione**: 3.0.0
-**Ultimo aggiornamento**: 2025-12-23
+**Versione**: 3.1.0
+**Ultimo aggiornamento**: 2026-01-29

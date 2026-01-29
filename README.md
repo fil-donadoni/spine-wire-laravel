@@ -9,7 +9,7 @@ This package provides:
 - **Docker Configuration**: Multi-stage Dockerfile with FrankenPHP + Octane
 - **CI/CD Pipeline**: Cloud Build configuration for automated deployments
 - **Health Check**: Controller and service for Cloud Run probes
-- **GCP Clients**: Pre-configured Cloud Storage and Pub/Sub clients
+- **GCP Clients**: Pre-configured Cloud Storage, Pub/Sub and Cloud Run Jobs clients
 
 ## Architecture
 
@@ -156,7 +156,7 @@ curl http://localhost:8080/health
 
 ## GCP Services
 
-The package registers `StorageClient` and `PubSubClient` as singletons using Application Default Credentials (ADC).
+The package registers `StorageClient`, `PubSubClient` and `CloudRunJobService` as singletons using Application Default Credentials (ADC).
 
 ### Cloud Storage
 
@@ -209,6 +209,54 @@ foreach ($messages as $message) {
     $subscription->acknowledge($message);
 }
 ```
+
+### Cloud Run Jobs
+
+Trigger Cloud Run Jobs on-demand via the Cloud Run Admin API. Useful for running import tasks, data processing, or any operation that should execute in a dedicated Cloud Run Job container rather than in a queue worker.
+
+#### Setup
+
+1. Add to `config/services.php`:
+
+```php
+'google' => [
+    'project_id' => env('GOOGLE_CLOUD_PROJECT'),
+    'region' => env('GCP_REGION', 'europe-west1'),
+],
+```
+
+2. Set the environment variable (if not already present):
+
+```env
+GOOGLE_CLOUD_PROJECT=my-project-123456
+```
+
+3. Grant the `roles/run.invoker` IAM role to the Cloud Run service account on the target job.
+
+4. For local development, authenticate with:
+
+```bash
+gcloud auth application-default login
+```
+
+#### Usage
+
+```php
+use FilDonadoni\SpineWireLaravel\CloudRun\CloudRunJobService;
+
+// Via dependency injection
+public function import(CloudRunJobService $cloudRunJobService)
+{
+    $cloudRunJobService->run('my-import-job');
+
+    return response()->json([], 202);
+}
+
+// Via container
+app(CloudRunJobService::class)->run('my-import-job');
+```
+
+The `run()` method calls the Cloud Run Admin API v2 (`jobs/:run`) and throws an exception if the request fails.
 
 ## Deployment
 
