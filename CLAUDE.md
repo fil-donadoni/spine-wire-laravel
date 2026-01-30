@@ -44,7 +44,8 @@ spine-wire-laravel/
 │   │   └── GoogleCloudPubSubServiceProvider.php
 │   └── Storage/
 │       ├── GoogleCloudStorageServiceProvider.php
-│       └── GoogleCloudStorageAdapter.php   # Custom FilesystemAdapter con url/temporaryUrl
+│       ├── GoogleCloudStorageAdapter.php   # Custom FilesystemAdapter con url/temporaryUrl
+│       └── IamSigner.php                  # SignBlobInterface per signing locale via IAM API
 ├── stubs/
 │   ├── .dockerignore
 │   ├── app/                          # Copiati nel progetto target
@@ -210,7 +211,9 @@ Il package registra un driver Flysystem `gcs` che permette di usare `Storage::di
 | Locale (`gcloud auth`) | `UserRefreshCredentials` | ❌ |
 | Locale con impersonation | `ImpersonatedServiceAccountCredentials` | ✅ Via IAM Credentials API |
 
-Quando `service_account` è configurato nel disk E le credenziali ADC non supportano signing, il `buildStorageClient()` crea un `StorageClient` con `ImpersonatedServiceAccountCredentials`. Su Cloud Run l'impersonation viene ignorata perché `GCECredentials` già implementa `SignBlobInterface`.
+Quando `service_account` è configurato nel disk E le credenziali ADC non supportano signing, l'adapter usa `IamSigner`: una classe che implementa `SignBlobInterface` e chiama la IAM signBlob API con il token dell'utente (non del SA) per firmare per conto del service account. Su Cloud Run l'intero meccanismo viene ignorato perché `GCECredentials` già implementa `SignBlobInterface`.
+
+**Nota tecnica**: non si può usare `ImpersonatedServiceAccountCredentials` perché il token impersonato del SA chiamerebbe `signBlob` per sé stesso, richiedendo `iam.serviceAccounts.implicitDelegation`. Invece `IamSigner` usa il token ADC dell'utente → serve solo `serviceAccountTokenCreator`.
 
 ### Configurazione disk
 
@@ -291,6 +294,7 @@ php artisan devops:setup --force
 - [ ] `php -l src/Commands/SetupDevOpsCommand.php`
 - [ ] `php -l src/Storage/GoogleCloudStorageServiceProvider.php`
 - [ ] `php -l src/Storage/GoogleCloudStorageAdapter.php`
+- [ ] `php -l src/Storage/IamSigner.php`
 - [ ] `php -l config/devops.php`
 - [ ] `bash -n stubs/docker/entrypoints/*.sh`
 - [ ] Placeholder corretti nei file .stub
@@ -374,6 +378,7 @@ docker build -f docker/Dockerfile -t test .
 - `src/Commands/SetupDevOpsCommand.php`: Logica principale devops:setup
 - `src/Storage/GoogleCloudStorageServiceProvider.php`: Driver Flysystem `gcs` + singleton StorageClient
 - `src/Storage/GoogleCloudStorageAdapter.php`: Custom FilesystemAdapter (url, temporaryUrl, temporaryUploadUrl)
+- `src/Storage/IamSigner.php`: SignBlobInterface che firma via IAM API con token utente
 - `src/CloudRun/CloudRunJobService.php`: Trigger Cloud Run Jobs on-demand
 - `src/CloudRun/CloudRunServiceProvider.php`: Service provider Cloud Run
 - `stubs/docker/Dockerfile.stub`: Template Dockerfile

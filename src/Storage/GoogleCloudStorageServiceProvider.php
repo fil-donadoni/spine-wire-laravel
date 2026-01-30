@@ -2,9 +2,6 @@
 
 namespace FilDonadoni\SpineWireLaravel\Storage;
 
-use Google\Auth\ApplicationDefaultCredentials;
-use Google\Auth\Credentials\ImpersonatedServiceAccountCredentials;
-use Google\Auth\SignBlobInterface;
 use Google\Cloud\Storage\StorageClient;
 use Illuminate\Filesystem\FilesystemManager;
 use Illuminate\Support\ServiceProvider;
@@ -71,7 +68,8 @@ class GoogleCloudStorageServiceProvider extends ServiceProvider
         $filesystemManager = $this->app->make('filesystem');
 
         $filesystemManager->extend('gcs', function ($app, array $config) {
-            $storageClient = $this->buildStorageClient($config);
+            /** @var StorageClient $storageClient */
+            $storageClient = $app->make(StorageClient::class);
 
             $bucket = $storageClient->bucket($config['bucket']);
             $prefix = $config['path_prefix'] ?? '';
@@ -81,43 +79,6 @@ class GoogleCloudStorageServiceProvider extends ServiceProvider
 
             return new GoogleCloudStorageAdapter($driver, $adapter, $config, $bucket);
         });
-    }
-
-    /**
-     * Build a StorageClient for the Flysystem driver.
-     *
-     * On Cloud Run, ADC returns GCECredentials which supports signing natively.
-     * Locally, ADC returns UserRefreshCredentials which cannot sign.
-     * When `service_account` is configured, we impersonate that SA so signing works everywhere.
-     */
-    private function buildStorageClient(array $config): StorageClient
-    {
-        $clientConfig = [];
-
-        $projectId = getenv('GOOGLE_CLOUD_PROJECT');
-        if ($projectId) {
-            $clientConfig['projectId'] = $projectId;
-        }
-
-        if ($serviceAccount = $config['service_account'] ?? null) {
-            $scope = 'https://www.googleapis.com/auth/cloud-platform';
-            $sourceCredentials = ApplicationDefaultCredentials::getCredentials($scope);
-
-            if (!$sourceCredentials instanceof SignBlobInterface) {
-                $clientConfig['credentialsFetcher'] = new ImpersonatedServiceAccountCredentials(
-                    $scope,
-                    [
-                        'service_account_impersonation_url' => sprintf(
-                            'https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/%s:generateAccessToken',
-                            $serviceAccount,
-                        ),
-                        'source_credentials' => $sourceCredentials,
-                    ],
-                );
-            }
-        }
-
-        return new StorageClient($clientConfig);
     }
 
     /**
