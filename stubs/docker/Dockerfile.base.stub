@@ -72,7 +72,8 @@ RUN install-php-extensions \
     opcache \
     intl \
     imagick \
-    redis
+    redis \
+    bcmath
 
 # Install Composer
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
@@ -90,4 +91,4 @@ LABEL maintainer="Laravel GCP DevOps Kit"
 LABEL description="Pre-compiled base image for Laravel applications on GCP"
 LABEL php.version="8.4"
 LABEL frankenphp.base="dunglas/frankenphp:php8.4-alpine"
-LABEL extensions="zip,pdo_pgsql,pgsql,gd,pcntl,sockets,opcache,intl,imagick,redis"
+LABEL extensions="zip,pdo_pgsql,pgsql,gd,pcntl,sockets,opcache,intl,imagick,redis,bcmath"
