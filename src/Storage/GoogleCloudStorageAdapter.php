@@ -3,7 +3,6 @@
 namespace FilDonadoni\SpineWireLaravel\Storage;
 
 use Google\Auth\ApplicationDefaultCredentials;
-use Google\Auth\Iam;
 use Google\Auth\SignBlobInterface;
 use Google\Cloud\Storage\Bucket;
 use Illuminate\Filesystem\FilesystemAdapter;
@@ -79,8 +78,7 @@ class GoogleCloudStorageAdapter extends FilesystemAdapter
 
         // Use the IAM API to sign on behalf of the service account,
         // authenticated with the user's own access token
-        $iam = new Iam();
-        $options['credentialsFetcher'] = new IamSigner($iam, $serviceAccount, $accessToken);
+        $options['credentialsFetcher'] = new IamSigner($serviceAccount, $accessToken);
 
         return $options;
     }

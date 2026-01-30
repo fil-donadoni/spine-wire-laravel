@@ -2,27 +2,49 @@
 
 namespace FilDonadoni\SpineWireLaravel\Storage;
 
-use Google\Auth\Iam;
 use Google\Auth\SignBlobInterface;
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\Request;
 
 /**
  * Signs blobs via the IAM Credentials API using an externally-provided access token.
  *
- * This allows signing on behalf of a service account using the caller's own
- * credentials (e.g. a user's ADC token), avoiding the `implicitDelegation`
- * permission that would be required if the SA tried to sign for itself.
+ * Calls the IAM signBlob API directly (without delegates) to avoid the
+ * `implicitDelegation` permission. The caller's ADC token is used to
+ * authenticate — only `roles/iam.serviceAccountTokenCreator` is needed.
  */
 class IamSigner implements SignBlobInterface
 {
+    private const IAM_API = 'https://iamcredentials.googleapis.com/v1';
+    private const SA_NAME = 'projects/-/serviceAccounts/%s';
+
     public function __construct(
-        private Iam $iam,
         private string $serviceAccountEmail,
         private string $accessToken,
     ) {}
 
     public function signBlob($stringToSign, $forceOpenSsl = false)
     {
-        return $this->iam->signBlob($this->serviceAccountEmail, $this->accessToken, $stringToSign);
+        $name = sprintf(self::SA_NAME, $this->serviceAccountEmail);
+        $uri = self::IAM_API . '/' . $name . ':signBlob?alt=json';
+
+        $request = new Request(
+            'POST',
+            $uri,
+            [
+                'Authorization' => 'Bearer ' . $this->accessToken,
+                'Content-Type' => 'application/json',
+            ],
+            json_encode([
+                'payload' => base64_encode($stringToSign),
+            ]),
+        );
+
+        $client = new Client();
+        $response = $client->send($request);
+        $body = json_decode((string) $response->getBody(), true);
+
+        return $body['signedBlob'];
     }
 
     public function getClientName(?callable $httpHandler = null)
