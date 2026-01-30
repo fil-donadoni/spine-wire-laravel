@@ -95,15 +95,9 @@ GOOGLE_CLOUD_PROJECT=your-gcp-project-id
 GCS_BUCKET=your-bucket-name
 ```
 
-### config/filesystems.php (optional)
+### config/filesystems.php
 
-To use Cloud Storage as a Laravel filesystem disk, install the Spatie package:
-
-```bash
-composer require spatie/laravel-google-cloud-storage
-```
-
-Then add a disk in `config/filesystems.php`:
+Add a `gcs` disk in `config/filesystems.php`:
 
 ```php
 'disks' => [
@@ -111,11 +105,10 @@ Then add a disk in `config/filesystems.php`:
 
     'gcs' => [
         'driver' => 'gcs',
-        'project_id' => env('GOOGLE_CLOUD_PROJECT'),
         'bucket' => env('GCS_BUCKET'),
         'path_prefix' => env('GCS_PATH_PREFIX', ''),
-        'visibility' => 'public',
-        // Uses Application Default Credentials (ADC) - no key file needed
+        'storage_api_uri' => env('GCS_STORAGE_API_URI', 'https://storage.googleapis.com'),
+        'service_account' => env('GCS_SERVICE_ACCOUNT'),
     ],
 ],
 ```
@@ -125,7 +118,22 @@ Usage:
 ```php
 Storage::disk('gcs')->put('path/file.txt', $contents);
 Storage::disk('gcs')->get('path/file.txt');
+Storage::disk('gcs')->url('path/file.txt');
+Storage::disk('gcs')->temporaryUrl('path/file.txt', now()->addHour());
 ```
+
+The `gcs` driver is registered by this package — no additional packages (e.g. Spatie) are needed.
+
+#### Signed URLs and authentication
+
+`temporaryUrl()` and `temporaryUploadUrl()` require credentials that can sign blobs.
+
+- **Cloud Run**: works automatically. `GCECredentials` supports signing natively via the metadata server.
+- **Local development**: `gcloud auth application-default login` returns `UserRefreshCredentials` which **cannot sign**. You must configure `GCS_SERVICE_ACCOUNT` with the Cloud Run service account email, so the package impersonates it via the IAM Credentials API.
+
+The impersonation is only activated when the ADC credentials don't already support signing (i.e. locally). On Cloud Run the `service_account` config is ignored.
+
+**IAM requirements for local signing**: your user account must have `roles/iam.serviceAccountTokenCreator` on the target service account.
 
 ## Local Development
 
@@ -133,6 +141,12 @@ Authenticate with GCP:
 
 ```bash
 gcloud auth application-default login
+```
+
+Set the service account email in `.env` for signed URL support:
+
+```env
+GCS_SERVICE_ACCOUNT=my-sa@my-project.iam.gserviceaccount.com
 ```
 
 ### Build and Run
@@ -160,27 +174,21 @@ The package registers `StorageClient`, `PubSubClient` and `CloudRunJobService` a
 
 ### Cloud Storage
 
+Use the `gcs` Flysystem disk (see [config/filesystems.php](#configfilesystemsphp) above):
+
+```php
+Storage::disk('gcs')->put('reports/file.zip', $contents);
+Storage::disk('gcs')->temporaryUrl('reports/file.zip', now()->addHour());
+```
+
+The raw `StorageClient` singleton is also available for advanced usage:
+
 ```php
 use Google\Cloud\Storage\StorageClient;
 
-// Via dependency injection
 public function __construct(private StorageClient $storage) {}
 
-// Via app helper
-$storage = app('gcp.storage');
-
-// Upload
-$bucket = $storage->bucket('my-bucket');
-$bucket->upload(fopen('/path/to/file.txt', 'r'), [
-    'name' => 'destination/file.txt'
-]);
-
-// Download
-$object = $bucket->object('path/to/file.txt');
-$contents = $object->downloadAsString();
-
-// Signed URL
-$url = $object->signedUrl(new \DateTime('+1 hour'));
+// or: app('gcp.storage')
 ```
 
 ### Pub/Sub

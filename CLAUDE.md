@@ -25,7 +25,7 @@ Per Terraform e infrastructure-as-code, usa l'app companion:
 - **Backend**: PHP ^8.2, Laravel ^11.0|^12.0
 - **Container**: Docker, FrankenPHP + Octane
 - **Cloud**: Google Cloud Platform (Cloud Run)
-- **Dipendenze**: `google/apiclient` per ADC (Cloud Run Jobs), `google/cloud-storage`, `google/cloud-pubsub`
+- **Dipendenze**: `google/apiclient` per ADC (Cloud Run Jobs), `google/cloud-storage`, `google/cloud-pubsub`, `league/flysystem-google-cloud-storage`
 
 ---
 
@@ -43,7 +43,8 @@ spine-wire-laravel/
 │   ├── PubSub/
 │   │   └── GoogleCloudPubSubServiceProvider.php
 │   └── Storage/
-│       └── GoogleCloudStorageServiceProvider.php
+│       ├── GoogleCloudStorageServiceProvider.php
+│       └── GoogleCloudStorageAdapter.php   # Custom FilesystemAdapter con url/temporaryUrl
 ├── stubs/
 │   ├── .dockerignore
 │   ├── app/                          # Copiati nel progetto target
@@ -189,6 +190,53 @@ Il metodo `run()` chiama la Cloud Run Admin API v2 (`jobs/:run`) e lancia un'ecc
 
 ---
 
+## Storage: Driver Flysystem `gcs`
+
+Il package registra un driver Flysystem `gcs` che permette di usare `Storage::disk('gcs')` senza dipendenze esterne (es. Spatie).
+
+### Architettura
+
+- `GoogleCloudStorageServiceProvider::register()` — registra il singleton `StorageClient` con ADC (come prima)
+- `GoogleCloudStorageServiceProvider::boot()` — chiama `Storage::extend('gcs', ...)` per registrare il driver Flysystem
+- `GoogleCloudStorageAdapter` — estende `Illuminate\Filesystem\FilesystemAdapter` con supporto a `url()`, `temporaryUrl()`, `temporaryUploadUrl()`
+
+### Signed URLs e SignBlobInterface
+
+`temporaryUrl()` e `temporaryUploadUrl()` richiedono credenziali che implementano `Google\Auth\SignBlobInterface`.
+
+| Ambiente | Tipo credenziali | Supporta signing |
+|----------|-----------------|------------------|
+| Cloud Run | `GCECredentials` | ✅ Nativo (metadata server) |
+| Locale (`gcloud auth`) | `UserRefreshCredentials` | ❌ |
+| Locale con impersonation | `ImpersonatedServiceAccountCredentials` | ✅ Via IAM Credentials API |
+
+Quando `service_account` è configurato nel disk E le credenziali ADC non supportano signing, il `buildStorageClient()` crea un `StorageClient` con `ImpersonatedServiceAccountCredentials`. Su Cloud Run l'impersonation viene ignorata perché `GCECredentials` già implementa `SignBlobInterface`.
+
+### Configurazione disk
+
+```php
+// config/filesystems.php
+'gcs' => [
+    'driver' => 'gcs',
+    'bucket' => env('GCS_BUCKET'),
+    'path_prefix' => env('GCS_PATH_PREFIX', ''),
+    'storage_api_uri' => env('GCS_STORAGE_API_URI', 'https://storage.googleapis.com'),
+    'service_account' => env('GCS_SERVICE_ACCOUNT'), // email SA per signing locale
+],
+```
+
+### Sviluppo locale
+
+```env
+GCS_SERVICE_ACCOUNT=my-sa@my-project.iam.gserviceaccount.com
+```
+
+L'utente locale deve avere `roles/iam.serviceAccountTokenCreator` sul service account target.
+
+**IMPORTANTE**: non si usano file di credenziali (key file JSON). L'autenticazione è sempre tramite ADC + impersonation.
+
+---
+
 ## Frontend Build Configuration
 
 Il Dockerfile supporta sia **Vite** che **Laravel Mix** out-of-the-box.
@@ -241,6 +289,8 @@ php artisan devops:setup --force
 ## CHECKLIST Pre-Commit
 
 - [ ] `php -l src/Commands/SetupDevOpsCommand.php`
+- [ ] `php -l src/Storage/GoogleCloudStorageServiceProvider.php`
+- [ ] `php -l src/Storage/GoogleCloudStorageAdapter.php`
 - [ ] `php -l config/devops.php`
 - [ ] `bash -n stubs/docker/entrypoints/*.sh`
 - [ ] Placeholder corretti nei file .stub
@@ -322,6 +372,8 @@ docker build -f docker/Dockerfile -t test .
 ### File Chiave
 
 - `src/Commands/SetupDevOpsCommand.php`: Logica principale devops:setup
+- `src/Storage/GoogleCloudStorageServiceProvider.php`: Driver Flysystem `gcs` + singleton StorageClient
+- `src/Storage/GoogleCloudStorageAdapter.php`: Custom FilesystemAdapter (url, temporaryUrl, temporaryUploadUrl)
 - `src/CloudRun/CloudRunJobService.php`: Trigger Cloud Run Jobs on-demand
 - `src/CloudRun/CloudRunServiceProvider.php`: Service provider Cloud Run
 - `stubs/docker/Dockerfile.stub`: Template Dockerfile
@@ -330,5 +382,5 @@ docker build -f docker/Dockerfile -t test .
 
 ---
 
-**Versione**: 3.1.0
-**Ultimo aggiornamento**: 2026-01-29
+**Versione**: 3.2.0
+**Ultimo aggiornamento**: 2026-01-30
