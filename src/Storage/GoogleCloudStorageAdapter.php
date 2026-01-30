@@ -18,7 +18,7 @@ class GoogleCloudStorageAdapter extends FilesystemAdapter
         parent::__construct($driver, $adapter, $config);
     }
 
-    public function url(string $path): string
+    public function url($path): string
     {
         $storageApiUri = $this->config['storage_api_uri'] ?? 'https://storage.googleapis.com';
 
