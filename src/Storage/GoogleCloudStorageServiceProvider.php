@@ -3,7 +3,10 @@
 namespace FilDonadoni\SpineWireLaravel\Storage;
 
 use Google\Cloud\Storage\StorageClient;
+use Illuminate\Filesystem\FilesystemManager;
 use Illuminate\Support\ServiceProvider;
+use League\Flysystem\Filesystem;
+use League\Flysystem\GoogleCloudStorage\GoogleCloudStorageAdapter as FlysystemGcsAdapter;
 
 /**
  * Google Cloud Storage integration for Laravel
@@ -54,6 +57,28 @@ class GoogleCloudStorageServiceProvider extends ServiceProvider
 
         // Alias string key to same instance (both point to same singleton)
         $this->app->alias(StorageClient::class, 'gcp.storage');
+    }
+
+    /**
+     * Register the `gcs` Flysystem driver
+     */
+    public function boot(): void
+    {
+        /** @var FilesystemManager $filesystemManager */
+        $filesystemManager = $this->app->make('filesystem');
+
+        $filesystemManager->extend('gcs', function ($app, array $config) {
+            /** @var StorageClient $storageClient */
+            $storageClient = $app->make(StorageClient::class);
+
+            $bucket = $storageClient->bucket($config['bucket']);
+            $prefix = $config['path_prefix'] ?? '';
+
+            $adapter = new FlysystemGcsAdapter($bucket, $prefix);
+            $driver = new Filesystem($adapter, $config);
+
+            return new GoogleCloudStorageAdapter($driver, $adapter, $config, $bucket);
+        });
     }
 
     /**
