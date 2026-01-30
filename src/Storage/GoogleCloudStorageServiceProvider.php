@@ -83,6 +83,10 @@ class GoogleCloudStorageServiceProvider extends ServiceProvider
             $adapter = new FlysystemGcsAdapter($bucket, $prefix, $visibilityHandler);
             $driver = new Filesystem($adapter, $config);
 
+            // Map path_prefix to root so FilesystemAdapter's prefixer works
+            // for temporaryUrl/url methods
+            $config['root'] = $prefix;
+
             return new GoogleCloudStorageAdapter($driver, $adapter, $config, $bucket);
         });
     }
