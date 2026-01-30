@@ -109,6 +109,7 @@ Add a `gcs` disk in `config/filesystems.php`:
         'path_prefix' => env('GCS_PATH_PREFIX', ''),
         'storage_api_uri' => env('GCS_STORAGE_API_URI', 'https://storage.googleapis.com'),
         'service_account' => env('GCS_SERVICE_ACCOUNT'),
+        'uniform_bucket_level_access' => true, // false for fine-grained ACL buckets
     ],
 ],
 ```

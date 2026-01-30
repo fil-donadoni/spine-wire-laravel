@@ -7,6 +7,8 @@ use Illuminate\Filesystem\FilesystemManager;
 use Illuminate\Support\ServiceProvider;
 use League\Flysystem\Filesystem;
 use League\Flysystem\GoogleCloudStorage\GoogleCloudStorageAdapter as FlysystemGcsAdapter;
+use League\Flysystem\GoogleCloudStorage\PortableVisibilityHandler;
+use League\Flysystem\GoogleCloudStorage\UniformBucketLevelAccessVisibility;
 
 /**
  * Google Cloud Storage integration for Laravel
@@ -74,7 +76,11 @@ class GoogleCloudStorageServiceProvider extends ServiceProvider
             $bucket = $storageClient->bucket($config['bucket']);
             $prefix = $config['path_prefix'] ?? '';
 
-            $adapter = new FlysystemGcsAdapter($bucket, $prefix);
+            $uniformAccess = $config['uniform_bucket_level_access'] ?? true;
+            $visibilityHandler = $uniformAccess
+                ? new UniformBucketLevelAccessVisibility()
+                : new PortableVisibilityHandler();
+            $adapter = new FlysystemGcsAdapter($bucket, $prefix, $visibilityHandler);
             $driver = new Filesystem($adapter, $config);
 
             return new GoogleCloudStorageAdapter($driver, $adapter, $config, $bucket);
