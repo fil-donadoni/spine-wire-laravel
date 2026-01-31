@@ -9,7 +9,8 @@
         "google/apiclient": "^2.18",
         "google/cloud-storage": "^1.30",
         "league/flysystem-google-cloud-storage": "^3.0",
-        "google/cloud-pubsub": "^2.0"
+        "google/cloud-pubsub": "^2.0",
+        "laravel/octane": "^2.0"
     },
     "autoload": {
         "psr-4": {

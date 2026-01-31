@@ -62,18 +62,24 @@ COPY vite.config.* webpack.mix.* tsconfig.* postcss.config.* tailwind.config.* .
 COPY artisan* ./
 
 {{#IF:ENABLE_WAYFINDER}}
-# Copy pre-generated Wayfinder route definitions
+# Copy pre-generated Wayfinder definitions (actions, routes, and shared helpers)
 COPY --from=wayfinder-gen /var/www/resources/js/actions ./resources/js/actions
+COPY --from=wayfinder-gen /var/www/resources/js/routes ./resources/js/routes
+COPY --from=wayfinder-gen /var/www/resources/js/wayfinder ./resources/js/wayfinder
 {{/IF:ENABLE_WAYFINDER}}
 
 # Create public directory for build output (Vite/Mix will output here)
 RUN mkdir -p public
 
+{{#IF:ENABLE_WAYFINDER}}
+# Wayfinder files are pre-generated in the wayfinder-gen stage (PHP required).
+# Override the plugin command to skip regeneration (no PHP in this stage).
+{{/IF:ENABLE_WAYFINDER}}
 {{#IF:USE_PNPM}}
-RUN pnpm run {{NPM_BUILD_SCRIPT}}
+RUN {{#IF:ENABLE_WAYFINDER}}WAYFINDER_CMD="true" {{/IF:ENABLE_WAYFINDER}}pnpm run {{NPM_BUILD_SCRIPT}}
 {{/IF:USE_PNPM}}
 {{#IF:USE_NPM}}
-RUN npm run {{NPM_BUILD_SCRIPT}}
+RUN {{#IF:ENABLE_WAYFINDER}}WAYFINDER_CMD="true" {{/IF:ENABLE_WAYFINDER}}npm run {{NPM_BUILD_SCRIPT}}
 {{/IF:USE_NPM}}
 
 {{/IF:ENABLE_FRONTEND}}
