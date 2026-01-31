@@ -152,6 +152,7 @@ class SetupDevOpsCommand extends Command
                 $this->config['use_npm'] = $this->config['package_manager'] === 'npm';
                 $this->config['use_pnpm'] = $this->config['package_manager'] === 'pnpm';
                 $this->config['npm_build_script'] = $this->option('npm-build-script') ?? config('devops.defaults.npm_build_script', 'build');
+                $this->config['enable_wayfinder'] = config('devops.defaults.enable_wayfinder', false);
             } else {
                 $this->config['disable_frontend'] = true;
             }
@@ -188,6 +189,11 @@ class SetupDevOpsCommand extends Command
                     'npm-build-script',
                     'NPM build script (check your package.json: build, prod, etc.)',
                     config('devops.defaults.npm_build_script', 'build')
+                );
+
+                $this->config['enable_wayfinder'] = $this->confirm(
+                    'Does your project use Laravel Wayfinder? (generates TypeScript route definitions)',
+                    config('devops.defaults.enable_wayfinder', false)
                 );
             } else {
                 $this->config['disable_frontend'] = true;
@@ -235,6 +241,7 @@ class SetupDevOpsCommand extends Command
                 ['Frontend Build Tools', $this->config['enable_frontend'] ? '✓' : '✗'],
                 ['ImageMagick', $this->config['enable_imagick'] ? '✓' : '✗'],
                 ['Redis Extension', $this->config['enable_redis'] ? '✓' : '✗'],
+                ['Wayfinder', !empty($this->config['enable_wayfinder']) ? '✓' : '✗'],
             ]
         );
         $this->newLine();

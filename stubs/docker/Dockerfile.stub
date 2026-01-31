@@ -13,6 +13,26 @@
 ARG BASE_IMAGE={{GCP_REGION}}-docker.pkg.dev/{{PROJECT_ID}}/{{CLIENT_NAME}}-{{APP_NAME}}-base/laravel-base:php8.4-alpine
 
 {{#IF:ENABLE_FRONTEND}}
+{{#IF:ENABLE_WAYFINDER}}
+# -----------------------------------------------------------------------------
+# Stage: Wayfinder - Generate TypeScript route definitions
+# -----------------------------------------------------------------------------
+# Wayfinder's Vite plugin runs `php artisan wayfinder:generate` during build.
+# Since the node-builder stage has no PHP, we pre-generate here.
+FROM ${BASE_IMAGE} AS wayfinder-gen
+
+WORKDIR /var/www
+
+COPY composer.json composer.lock ./
+
+RUN --mount=type=cache,target=/root/.composer \
+    composer install --no-dev --no-interaction --optimize-autoloader --no-scripts
+
+COPY . .
+
+RUN php artisan wayfinder:generate
+{{/IF:ENABLE_WAYFINDER}}
+
 # -----------------------------------------------------------------------------
 # Stage 1: Node.js builder - Compile frontend assets
 # -----------------------------------------------------------------------------
@@ -40,6 +60,11 @@ COPY vite.config.* webpack.mix.* tsconfig.* postcss.config.* tailwind.config.* .
 # Copy artisan for Laravel Mix detection (Mix uses this to auto-set publicPath)
 # Using wildcard so it doesn't fail if artisan doesn't exist (e.g., non-Laravel projects)
 COPY artisan* ./
+
+{{#IF:ENABLE_WAYFINDER}}
+# Copy pre-generated Wayfinder route definitions
+COPY --from=wayfinder-gen /var/www/resources/js/actions ./resources/js/actions
+{{/IF:ENABLE_WAYFINDER}}
 
 # Create public directory for build output (Vite/Mix will output here)
 RUN mkdir -p public

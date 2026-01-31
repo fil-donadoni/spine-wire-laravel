@@ -25,6 +25,7 @@ return [
         'package_manager' => 'pnpm',        // Package manager (npm, pnpm)
         'enable_imagick' => false,          // Enable ImageMagick extension
         'enable_redis' => false,            // Enable Redis PHP extension
+        'enable_wayfinder' => false,        // Enable Laravel Wayfinder (generates TypeScript route definitions)
     ],
 
     /*
